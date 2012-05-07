@@ -99,7 +99,6 @@ function streamTile(layers, coord, output) {
 }
 
 module.exports = {
-  renderTile: renderTile,
   streamTile: streamTile
 };
 
