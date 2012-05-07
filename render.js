@@ -5,19 +5,14 @@
 // or from datasf.org, reprojected too:
 // ogr2ogr -f GeoJSON sfbay.js sfbay.shp -t_srs EPSG:4326
 
-var Canvas = require('canvas'),
-    Connect = require('connect'),
-    Express = require('express'),
-    path = require('path'),
-    http = require('http'),
-    fs = require('fs'),
-    Extend = require('./lib/extend');
+var Canvas = require('canvas');
+var path = require('path');
+var fs = require('fs');
+var Extend = require('./lib/extend');
     
 var utfgrid = require('./utfgrid');
 var renderEngine = require('./renderEngine');
 
-var port = process.env.PORT || 3000;
-    
 var project = {
     'FeatureCollection': function(fc) { fc.features.forEach(project.Feature); },
     'Feature': function(f) { project[f.geometry.type](f.geometry.coordinates); },
@@ -74,66 +69,9 @@ var t = +new Date();
 layers.forEach(project.FeatureCollection);
 console.log('done projecting in', new Date() - t, 'ms'); 
 
-var canvasBacklog = 0;
+(function main() {
+  var coord = [12, 654, 1583];
+  var fileStream = fs.createWriteStream('/tmp/output.png');
+  renderEngine.streamTile(layers, coord, fileStream);
+})();
 
-function tile(req, res) {
-  // TODO: clean this up since it's halfway to Express
-  var coord = [req.params.zoom, req.params.col, path.basename(req.params.row, '.png')];
-  if (!coord || coord.length != 3) {
-      console.error(req.url, 'not a coord, match =', coord);
-      res.writeHead(404);
-      res.end();
-      return;
-  }
-
-  res.writeHead(200, {'Content-Type': 'image/png'});    
-  renderEngine.streamTile(layers, coord, res);
-}
-
-
-
-// NB:- these functions are called using 'this' as our canvas context
-// it's not clear to me whether this architecture is right but it's neat ATM.
-var renderPath = {
-    'MultiPolygon': function(mp) {
-        mp.forEach(renderPath.Polygon, this);
-    },
-    'Polygon': function(p) {
-        p.forEach(renderPath.LineString, this);
-    },
-    'MultiLineString': function(ml) {
-        ml.forEach(renderPath.LineString, this);
-    },
-    'LineString': function(l) {
-        this.moveTo(l[0][0], l[0][1]);
-        l.slice(1).forEach(function(c){
-            this.lineTo(c[0], c[1]);            
-        }, this);
-    },
-    'MultiPoint': function(p) {
-        console.warn('MultiPoint geometry not implemented in renderPath');
-    },
-    'Point': function(p) {
-        console.warn('Point geometry not implemented in renderPath');
-    }
-};
-
-
-
-
-
-var app = Express.createServer();
-
-app.use(Connect.compress()); // compression
-
-app.get('/', function(req, res){
-  res.send(fs.readFileSync('./views/leaflet.html', 'utf8'));
-});
-app.get('/sf_tile.jsonp', function(req, res){
-  res.send(fs.readFileSync('./views/sf_tile.jsonp', 'utf8'));
-});
-app.get('/tiles/:zoom/:col/:row', tile);
-
-app.get('/utfgrids/:zoom/:col/:row', function(req, res) {return utfgrid.utfgrid(req, res, layers);});
-
-app.listen(port);
