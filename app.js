@@ -10,8 +10,7 @@ var Canvas = require('canvas'),
     Express = require('express'),
     path = require('path'),
     http = require('http'),
-    fs = require('fs'),
-    Extend = require('./lib/extend');
+    fs = require('fs');
     
 var utfgrid = require('./utfgrid');
 var renderEngine = require('./renderEngine');

@@ -10,24 +10,9 @@
 var Canvas = require('canvas');
 var path = require('path');
 var fs = require('fs');
-var Extend = require('./lib/extend');
     
-var utfgrid = require('./utfgrid');
 var renderEngine = require('./renderEngine');
-
-var project = {
-    'FeatureCollection': function(fc) { fc.features.forEach(project.Feature); },
-    'Feature': function(f) { project[f.geometry.type](f.geometry.coordinates); },
-    'MultiPolygon': function(mp) { mp.forEach(project.Polygon); },    
-    'Polygon': function(p) { p.forEach(project.LineString); },
-    'MultiLineString': function(ml) { ml.forEach(project.LineString); },
-    'LineString': function(l) { l.forEach(project.Point); },
-    'MultiPoint': function(mp) { mp.forEach(project.Point); },    
-    'Point': function(c) {
-        c[0] = 256.0 * (c[0] + 180) / 360.0;
-        c[1] = 256.0 - 256.0 * (Math.PI + Math.log(Math.tan(Math.PI/4+c[1]*(Math.PI/180)/2))) / (2*Math.PI);
-    }
-};
+var projector = require('./projector');
 
 function Layer(filename, styles) {
     var data = JSON.parse(fs.readFileSync(filename, 'utf8'));
@@ -69,7 +54,7 @@ function loadLayers() {
 
   console.log('projecting features...');
   var t = +new Date();
-  layers.forEach(project.FeatureCollection);
+  layers.forEach(projector.project.FeatureCollection);
   console.log('done projecting in', new Date() - t, 'ms'); 
 
   return layers;

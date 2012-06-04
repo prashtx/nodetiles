@@ -1,5 +1,6 @@
 /*jshint node:true */
 var Canvas = require('canvas');
+var projector = require('./projector');
 
 // NB:- these functions are called using 'this' as our canvas context
 // it's not clear to me whether this architecture is right but it's neat ATM.
@@ -30,6 +31,30 @@ var renderPath = {
 var canvasBacklog = 0;
 var bgColor = '#ddddff'; //'#ddddff';
 
+function renderTileNew(layers, ctx, zoom, center, width, height) {
+    var sc = Math.pow(2, zoom);
+    ctx.scale(sc,sc);
+    ctx.translate(-(-width/(2*sc) + center[0]), -(-width/(2*sc) + center[1]));
+    layers.forEach(function(layer, i) {
+        layer.styles.forEach(function(style) {
+            ctx.fillStyle = style.fillStyle || '';
+            ctx.strokeStyle = style.strokeStyle || '';
+            ctx.lineWidth = 'lineWidth' in style ? style.lineWidth / sc : 1.0 / sc;
+            layer.features.forEach(function(feature) {
+                ctx.beginPath();
+                var coordinates = feature.geometry.coordinates;
+                renderPath[feature.geometry.type].call(ctx, coordinates);
+                if (style.fillStyle) {
+                    ctx.fill();
+                }
+                if (style.strokeStyle) {
+                    ctx.stroke();
+                }
+                ctx.closePath();
+            });
+        });
+    });
+}
 function renderTile(layers, ctx, zoom, col, row) {
     var sc = Math.pow(2, zoom);
     ctx.scale(sc,sc);
@@ -61,7 +86,7 @@ function streamTile(layers, coord, output) {
     
     console.log('Requested tile: ' + coord.join('/'));
     var done = false;
-    setTimeout(function () {
+    var timeoutId = setTimeout(function () {
       if (!done) {
         console.log('!!! Tile ' + coord.join('/') + ' didn\'t finish in 10s!');
       }
@@ -70,15 +95,25 @@ function streamTile(layers, coord, output) {
     coord = coord.map(Number);
     //console.log('got coord', coord);
 
-    var canvas = new Canvas(256,256),
-        ctx = canvas.getContext('2d');
+    // XXX
+    //var canvas = new Canvas(256,256);
+    var width = 512;
+    var height = 512;
+    var center = [ -122.421941248602494, 37.773036050055346 ];
+    var canvas = new Canvas(width, height);
+    var ctx = canvas.getContext('2d');
     canvasBacklog++;
+    projector.project.Point(center);
+    console.log('re-projected center: ' + center);
     
     //ctx.antialias = 'none';
     ctx.fillStyle = bgColor;
-    ctx.fillRect(0,0,256,256);
+    //XXX ctx.fillRect(0,0,256,256);
+    ctx.fillRect(0,0,width,height);
     
-    renderTile(layers, ctx, coord[0], coord[1], coord[2]);
+    //XXX renderTile(layers, ctx, coord[0], coord[1], coord[2]);
+    // XXX renderTileNew(layers, ctx, coord[0], coord[1], coord[2], width, height);
+    renderTileNew(layers, ctx, 14, center, width, height);
 
     console.log('rendering done in', new Date() - d, 'ms');
     d = new Date();
@@ -90,11 +125,13 @@ function streamTile(layers, coord, output) {
     stream.on('end', function() {
         console.log('Tile streaming done in', new Date() - d, 'ms');
         output.end();
-        console.log('Returned tile: ' + coord.join('/') + '['+ --canvasBacklog +' more in backlog]');
+        console.log('Returned tile: ' + coord.join('/') +
+                    '['+ --canvasBacklog +' more in backlog]');
         done = true;
+        clearTimeout(timeoutId);
     });
     stream.on('close', function() {
-        console.log("STREAM CLOSED");
+        console.log('STREAM CLOSED');
     });
 }
 
